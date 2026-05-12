@@ -2,8 +2,12 @@
 // Клиент Supabase. Параметры подтянутся из env, которые Lovable
 // автоматически выставит после привязки Supabase-проекта.
 
-export { supabase } from "@/integrations/supabase/client";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase as typedClient } from "@/integrations/supabase/client";
+
+// Схема БД ещё не сгенерирована — приводим к any, чтобы существующий
+// код с таблицами sessions/slots/ideas/... компилировался.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabase = typedClient as any;
 
 // ───────── вызов Edge Function llm ─────────
 export async function callLLM<T = unknown>(
