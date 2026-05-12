@@ -97,7 +97,7 @@ export function useSession(sessionId: string | undefined): Result {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sessions", filter: `id=eq.${sessionId}` },
-        (p) => {
+        (p: any) => {
           const cur = stateRef.current;
           if (!cur) return;
           if (p.eventType === "UPDATE" || p.eventType === "INSERT") {
@@ -110,7 +110,7 @@ export function useSession(sessionId: string | undefined): Result {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "slots", filter: `session_id=eq.${sessionId}` },
-        (p) => {
+        (p: any) => {
           const cur = stateRef.current;
           if (!cur) return;
           const row = p.new as SlotRow;
@@ -125,7 +125,7 @@ export function useSession(sessionId: string | undefined): Result {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "ideas", filter: `session_id=eq.${sessionId}` },
-        (p) => {
+        (p: any) => {
           const cur = stateRef.current;
           if (!cur) return;
           if (p.eventType === "DELETE") {
@@ -143,7 +143,7 @@ export function useSession(sessionId: string | undefined): Result {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "idea_candidates", filter: `session_id=eq.${sessionId}` },
-        (p) => {
+        (p: any) => {
           const cur = stateRef.current;
           if (!cur) return;
           if (p.eventType === "DELETE") {
@@ -161,7 +161,7 @@ export function useSession(sessionId: string | undefined): Result {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "questions", filter: `session_id=eq.${sessionId}` },
-        (p) => {
+        (p: any) => {
           const cur = stateRef.current;
           if (!cur) return;
           if (p.eventType === "DELETE") {
@@ -178,7 +178,7 @@ export function useSession(sessionId: string | undefined): Result {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "steps", filter: `session_id=eq.${sessionId}` },
-        (p) => {
+        (p: any) => {
           const cur = stateRef.current;
           if (!cur) return;
           if (p.eventType === "DELETE") {
@@ -196,7 +196,7 @@ export function useSession(sessionId: string | undefined): Result {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "participants", filter: `session_id=eq.${sessionId}` },
-        (p) => {
+        (p: any) => {
           const cur = stateRef.current;
           if (!cur) return;
           if (p.eventType === "DELETE") {
