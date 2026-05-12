@@ -14,13 +14,375 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      idea_candidates: {
+        Row: {
+          author: string | null
+          confidence: number
+          created_at: string
+          id: string
+          session_id: string
+          text: string
+        }
+        Insert: {
+          author?: string | null
+          confidence?: number
+          created_at?: string
+          id?: string
+          session_id: string
+          text: string
+        }
+        Update: {
+          author?: string | null
+          confidence?: number
+          created_at?: string
+          id?: string
+          session_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idea_candidates_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ideas: {
+        Row: {
+          author: string
+          created_at: string
+          id: string
+          mark: string | null
+          n: number
+          session_id: string
+          text: string
+        }
+        Insert: {
+          author?: string
+          created_at?: string
+          id?: string
+          mark?: string | null
+          n: number
+          session_id: string
+          text: string
+        }
+        Update: {
+          author?: string
+          created_at?: string
+          id?: string
+          mark?: string | null
+          n?: number
+          session_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ideas_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      participants: {
+        Row: {
+          id: string
+          joined_at: string
+          name: string
+          session_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          name: string
+          session_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          name?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questions: {
+        Row: {
+          author: string
+          created_at: string
+          id: string
+          session_id: string
+          text: string
+        }
+        Insert: {
+          author?: string
+          created_at?: string
+          id?: string
+          session_id: string
+          text: string
+        }
+        Update: {
+          author?: string
+          created_at?: string
+          id?: string
+          session_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          active_slot: number
+          ai_questions: Json
+          clusters: Json | null
+          created_at: string
+          facilitator_name: string
+          id: string
+          notes: string
+          owner_name: string
+          paused: boolean
+          paused_accum_ms: number
+          paused_at: string | null
+          pending_chunk: string
+          stage: number
+          stage_started_at: string
+        }
+        Insert: {
+          active_slot?: number
+          ai_questions?: Json
+          clusters?: Json | null
+          created_at?: string
+          facilitator_name?: string
+          id: string
+          notes?: string
+          owner_name?: string
+          paused?: boolean
+          paused_accum_ms?: number
+          paused_at?: string | null
+          pending_chunk?: string
+          stage?: number
+          stage_started_at?: string
+        }
+        Update: {
+          active_slot?: number
+          ai_questions?: Json
+          clusters?: Json | null
+          created_at?: string
+          facilitator_name?: string
+          id?: string
+          notes?: string
+          owner_name?: string
+          paused?: boolean
+          paused_accum_ms?: number
+          paused_at?: string | null
+          pending_chunk?: string
+          stage?: number
+          stage_started_at?: string
+        }
+        Relationships: []
+      }
+      slots: {
+        Row: {
+          n: number
+          session_id: string
+          state: string
+          summary: string
+          title: string
+          transcript: string
+        }
+        Insert: {
+          n: number
+          session_id: string
+          state?: string
+          summary?: string
+          title?: string
+          transcript?: string
+        }
+        Update: {
+          n?: number
+          session_id?: string
+          state?: string
+          summary?: string
+          title?: string
+          transcript?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slots_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      steps: {
+        Row: {
+          created_at: string
+          detail: string
+          due: string
+          first_step: string
+          id: string
+          idea_refs: Json
+          n: number
+          session_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string
+          due?: string
+          first_step?: string
+          id?: string
+          idea_refs?: Json
+          n: number
+          session_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string
+          due?: string
+          first_step?: string
+          id?: string
+          idea_refs?: Json
+          n?: number
+          session_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "steps_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_candidate: {
+        Args: { p_author?: string; p_candidate_id: string; p_text?: string }
+        Returns: {
+          author: string
+          created_at: string
+          id: string
+          mark: string | null
+          n: number
+          session_id: string
+          text: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "ideas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      add_idea: {
+        Args: { p_author: string; p_session_id: string; p_text: string }
+        Returns: {
+          author: string
+          created_at: string
+          id: string
+          mark: string | null
+          n: number
+          session_id: string
+          text: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "ideas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      add_step: {
+        Args: {
+          p_detail?: string
+          p_due?: string
+          p_first_step?: string
+          p_idea_refs?: Json
+          p_session_id: string
+          p_title: string
+        }
+        Returns: {
+          created_at: string
+          detail: string
+          due: string
+          first_step: string
+          id: string
+          idea_refs: Json
+          n: number
+          session_id: string
+          title: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "steps"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_session: {
+        Args: {
+          p_facilitator_name?: string
+          p_id: string
+          p_owner_name?: string
+        }
+        Returns: {
+          active_slot: number
+          ai_questions: Json
+          clusters: Json | null
+          created_at: string
+          facilitator_name: string
+          id: string
+          notes: string
+          owner_name: string
+          paused: boolean
+          paused_accum_ms: number
+          paused_at: string | null
+          pending_chunk: string
+          stage: number
+          stage_started_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      next_slot: { Args: { p_session_id: string }; Returns: boolean }
+      next_stage: { Args: { p_session_id: string }; Returns: undefined }
+      remove_step: { Args: { p_step_id: string }; Returns: undefined }
+      toggle_idea_mark: {
+        Args: { p_idea_id: string; p_mark: string }
+        Returns: undefined
+      }
+      toggle_pause: { Args: { p_session_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
