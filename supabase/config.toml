@@ -1,0 +1,7 @@
+# Конфигурация Supabase для локальной разработки и деплоя.
+# project_id задаётся в Lovable автоматически после привязки Supabase-проекта.
+
+project_id = "mastermind"
+
+[functions.llm]
+verify_jwt = false

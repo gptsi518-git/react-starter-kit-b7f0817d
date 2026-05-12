@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══ Дизайн-токены · переписаны в HSL под Tailwind ═══ */
+@layer base {
+  :root {
+    --bg: 38 22% 96%;
+    --bg-soft: 39 18% 92%;
+    --paper: 0 0% 100%;
+    --border: 38 18% 85%;
+    --border-soft: 38 22% 89%;
+    --border-strong: 38 18% 79%;
+
+    --text-1: 38 12% 11%;
+    --text-2: 36 7% 31%;
+    --text-3: 36 7% 53%;
+
+    --teal-bg: 152 23% 91%;
+    --teal-bd: 152 24% 78%;
+    --teal-ink: 152 35% 26%;
+
+    --amber-bg: 41 64% 90%;
+    --amber-bd: 41 49% 71%;
+    --amber-ink: 41 56% 26%;
+
+    --purple-bg: 264 26% 92%;
+    --purple-bd: 264 27% 79%;
+    --purple-ink: 264 28% 32%;
+
+    --blue-bg: 215 26% 92%;
+    --blue-bd: 215 24% 75%;
+    --blue-ink: 215 41% 27%;
+
+    --rose-bg: 0 33% 92%;
+    --rose-bd: 0 30% 75%;
+    --rose-ink: 0 38% 30%;
+
+    --author-anya: 343 47% 70%;
+    --author-igor: 204 28% 49%;
+    --author-viktor: 41 31% 42%;
+    --author-marina: 282 36% 62%;
+    --author-dima: 158 30% 41%;
+    --author-mikh: 23 64% 47%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}
+
+/* ═══ Кастомные утилиты, которые часто нужны ═══ */
+@layer utilities {
+  .num-tabular { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+  .text-meta { @apply text-xs text-text-3 num-tabular; }
+}
+
+/* ═══ Сложные элементы, которые проще описать одним классом ═══ */
+@layer components {
+  .stage-prog-rail { @apply flex items-stretch gap-0; }
+  .live-cursor {
+    display: inline-block; width: 2px; height: 14px;
+    background: hsl(var(--text-2));
+    @apply animate-blink align-middle ml-0.5;
+  }
+}
