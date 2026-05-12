@@ -1,134 +1,92 @@
-// supabase/functions/llm/index.ts
-// Единая Edge Function для всех LLM-задач в Мастермайнде.
-// Принимает { task, payload }, маршрутизирует к одному из 5 промптов,
-// возвращает результат. Ключ Anthropic — в Supabase Secrets.
-//
-// Развёртывание: supabase functions deploy llm
-// Установка ключа: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+// Edge Function: единая точка LLM-задач для Мастермайнда.
+// Использует Lovable AI Gateway (LOVABLE_API_KEY уже есть в Cloud).
 
 // deno-lint-ignore-file no-explicit-any
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-const MODEL = "claude-sonnet-4-5-20250929";
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const MODEL = "google/gemini-2.5-flash";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-// ───────── вспомогательные ─────────
 
 function parseJSON(raw: string): any {
   let s = (raw || "").trim();
   s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const candidates = ["{", "["].map((c) => s.indexOf(c)).filter((i) => i !== -1);
-  const firstBrace = candidates.length ? Math.min(...candidates) : -1;
-  if (firstBrace > 0) s = s.slice(firstBrace);
-  const lastBrace = Math.max(s.lastIndexOf("}"), s.lastIndexOf("]"));
-  if (lastBrace !== -1) s = s.slice(0, lastBrace + 1);
+  const cands = ["{", "["].map((c) => s.indexOf(c)).filter((i) => i !== -1);
+  const first = cands.length ? Math.min(...cands) : -1;
+  if (first > 0) s = s.slice(first);
+  const last = Math.max(s.lastIndexOf("}"), s.lastIndexOf("]"));
+  if (last !== -1) s = s.slice(0, last + 1);
   return JSON.parse(s);
 }
 
-async function anthropicCall({
-  system,
-  user,
-  max_tokens = 1024,
-}: {
-  system: string;
-  user: string;
-  max_tokens?: number;
-}): Promise<string> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not set in Supabase Secrets");
-  }
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+async function llmCall({ system, user, max_tokens = 1024 }: { system: string; user: string; max_tokens?: number }): Promise<string> {
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not set");
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
     },
     body: JSON.stringify({
       model: MODEL,
       max_tokens,
-      system,
-      messages: [{ role: "user", content: user }],
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
     }),
   });
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`anthropic ${res.status}: ${txt}`);
+    if (res.status === 429) throw new Error("Rate limit exceeded — попробуйте позже");
+    if (res.status === 402) throw new Error("Payment required — пополните Lovable AI кредиты");
+    throw new Error(`AI gateway ${res.status}: ${txt}`);
   }
   const data = await res.json();
-  return (data.content || [])
-    .filter((b: any) => b.type === "text")
-    .map((b: any) => b.text)
-    .join("\n")
-    .trim();
+  return (data.choices?.[0]?.message?.content || "").trim();
 }
 
-// ───────── задачи ─────────
-
-async function summarizeSlot(
-  payload: { slotTitle: string; transcript: string; ownerName: string },
-) {
-  if (!payload.transcript || payload.transcript.trim().length < 10) {
+async function summarizeSlot(p: { slotTitle: string; transcript: string; ownerName: string }) {
+  if (!p.transcript || p.transcript.trim().length < 10) {
     return { summary: "(пока нечего резюмировать — мало текста)" };
   }
-  const system =
-    `Ты — помощник фасилитатора в формате «мастермайнд». Владелец сессии (${payload.ownerName}) рассказывает свою бизнес-ситуацию в слоте «${payload.slotTitle}». Твоя задача — сжать его рассказ в 1–2 коротких предложения по существу. Без вводных, без оценок, без вопросов. Только факты в нейтральном тоне. Отвечай простой строкой текста, без кавычек, без префиксов.`;
-  const user =
-    `Расшифровка слота «${payload.slotTitle}»:\n\n${payload.transcript}\n\nСожми в 1–2 предложения.`;
-  const summary = await anthropicCall({ system, user, max_tokens: 220 });
+  const system = `Ты — помощник фасилитатора в формате «мастермайнд». Владелец сессии (${p.ownerName}) рассказывает свою бизнес-ситуацию в слоте «${p.slotTitle}». Сожми его рассказ в 1–2 коротких предложения по существу. Без вводных, без оценок, без вопросов. Только факты в нейтральном тоне. Отвечай простой строкой текста, без кавычек, без префиксов.`;
+  const user = `Расшифровка слота «${p.slotTitle}»:\n\n${p.transcript}\n\nСожми в 1–2 предложения.`;
+  const summary = await llmCall({ system, user, max_tokens: 220 });
   return { summary };
 }
 
-async function generateClarifyingQuestions(
-  payload: {
-    slots: Array<{ title: string; summary: string; transcript: string }>;
-    ownerName: string;
-  },
-) {
-  const ctx = payload.slots
-    .map((s) => `[${s.title}] ${s.summary || s.transcript || "—"}`)
-    .join("\n");
-  const system =
-    `Ты помогаешь фасилитатору мастермайнда. Владелец (${payload.ownerName}) изложил запрос. Сейчас подэтап «уточняющие вопросы» — участники должны лучше понять контекст, прежде чем предлагать идеи. Твоя задача — сгенерировать 4 коротких уточняющих вопроса, которые помогли бы группе глубже разобраться в ситуации владельца. Вопросы должны быть конкретными, по существу, без советов и без скрытых рекомендаций. Отвечай строго JSON-массивом из 4 строк, без обёртки, без комментариев.`;
+async function generateClarifyingQuestions(p: { slots: Array<{ title: string; summary: string; transcript: string }>; ownerName: string }) {
+  const ctx = p.slots.map((s) => `[${s.title}] ${s.summary || s.transcript || "—"}`).join("\n");
+  const system = `Ты помогаешь фасилитатору мастермайнда. Владелец (${p.ownerName}) изложил запрос. Подэтап «уточняющие вопросы» — участники должны лучше понять контекст. Сгенерируй 4 коротких уточняющих вопроса, конкретных, по существу, без советов. Отвечай строго JSON-массивом из 4 строк, без обёртки.`;
   const user = `Запрос владельца:\n${ctx}\n\nСгенерируй 4 уточняющих вопроса.`;
-  const raw = await anthropicCall({ system, user, max_tokens: 600 });
+  const raw = await llmCall({ system, user, max_tokens: 600 });
   const arr = parseJSON(raw);
   return { questions: Array.isArray(arr) ? arr.slice(0, 4).map(String) : [] };
 }
 
-async function extractIdeaCandidates(payload: {
-  transcriptChunk: string;
-  ownerSummary: string;
-  knownAuthors: string[];
-}) {
-  if (!payload.transcriptChunk || payload.transcriptChunk.trim().length < 10) {
-    return { candidates: [] };
-  }
-  const authorsLine = payload.knownAuthors.length
-    ? `Известные участники: ${payload.knownAuthors.join(", ")}.`
-    : "";
-  const system = `Ты — помощник фасилитатора мастермайнда на подэтапе «идеи без критики». Участники наперебой подкидывают владельцу идеи. Твоя задача — выделить из свежей расшифровки реплик все идеи-предложения для владельца. Идея — это конкретное предложение действия или подхода, обращённое к владельцу.
+async function extractIdeaCandidates(p: { transcriptChunk: string; ownerSummary: string; knownAuthors: string[] }) {
+  if (!p.transcriptChunk || p.transcriptChunk.trim().length < 10) return { candidates: [] };
+  const authorsLine = p.knownAuthors.length ? `Известные участники: ${p.knownAuthors.join(", ")}.` : "";
+  const system = `Ты — помощник фасилитатора мастермайнда на подэтапе «идеи без критики». Выдели из расшифровки реплик все идеи-предложения для владельца. Идея — конкретное предложение действия, обращённое к владельцу.
 
 ${authorsLine}
 
 Правила:
-- Каждая идея — 1 короткое предложение, 8–18 слов, в инфинитиве или повелительном наклонении.
-- Если у реплики ясен автор — указывай его имя в author. Если непонятно — author: null.
-- confidence: 0.5 если нечётко, 0.7 если ясно, 0.9 если сказано прямо и без шума.
-- Не выдумывай идеи, которых нет в тексте. Лучше пустой массив, чем фантазии.
-- Если реплика — вопрос, обсуждение, согласие или критика — пропусти её.
+- 1 короткое предложение, 8–18 слов, в инфинитиве или повелительном наклонении.
+- Если автор ясен — указывай имя; иначе author: null.
+- confidence: 0.5 нечётко, 0.7 ясно, 0.9 прямо без шума.
+- Не выдумывай. Лучше пустой массив.
+- Вопросы/обсуждение/согласие/критику пропускай.
 
 Отвечай строго JSON-массивом: [{"text":"...","author":"Имя"|null,"confidence":0.7}]. Без обёртки.`;
-  const user =
-    `Контекст запроса владельца:\n${payload.ownerSummary}\n\nСвежие реплики:\n${payload.transcriptChunk}\n\nВыдели идеи.`;
-  const raw = await anthropicCall({ system, user, max_tokens: 800 });
+  const user = `Контекст запроса владельца:\n${p.ownerSummary}\n\nСвежие реплики:\n${p.transcriptChunk}\n\nВыдели идеи.`;
+  const raw = await llmCall({ system, user, max_tokens: 800 });
   const arr = parseJSON(raw);
   if (!Array.isArray(arr)) return { candidates: [] };
   return {
@@ -142,48 +100,27 @@ ${authorsLine}
   };
 }
 
-async function clusterIdeas(payload: {
-  ideas: Array<{ n: number; author: string; text: string }>;
-  ownerSummary: string;
-}) {
-  if (!payload.ideas || payload.ideas.length < 3) return { clusters: null };
-  const list = payload.ideas
-    .map((i) => `#${i.n} (${i.author}): ${i.text}`)
-    .join("\n");
-  const system =
-    `Ты группируешь идеи мастермайнда по смысловым кластерам. Сгруппируй в 2–4 кластера. Каждый кластер — короткое название (2–4 слова) и список номеров идей. Каждая идея ровно в один кластер. Отвечай JSON: {"clusters":[{"title":"...","ideaIds":[1,2]},...]}. Без обёртки.`;
-  const user = `Запрос:\n${payload.ownerSummary}\n\nИдеи:\n${list}\n\nСгруппируй.`;
-  const raw = await anthropicCall({ system, user, max_tokens: 800 });
+async function clusterIdeas(p: { ideas: Array<{ n: number; author: string; text: string }>; ownerSummary: string }) {
+  if (!p.ideas || p.ideas.length < 3) return { clusters: null };
+  const list = p.ideas.map((i) => `#${i.n} (${i.author}): ${i.text}`).join("\n");
+  const system = `Группируй идеи мастермайнда по смысловым кластерам. 2–4 кластера. Каждый: короткое название (2–4 слова) и список номеров идей. Каждая идея ровно в один кластер. JSON: {"clusters":[{"title":"...","ideaIds":[1,2]}]}. Без обёртки.`;
+  const user = `Запрос:\n${p.ownerSummary}\n\nИдеи:\n${list}\n\nСгруппируй.`;
+  const raw = await llmCall({ system, user, max_tokens: 800 });
   const obj = parseJSON(raw);
   if (!obj || !Array.isArray(obj.clusters)) return { clusters: null };
   return {
     clusters: obj.clusters
-      .filter(
-        (c: any) =>
-          c && typeof c.title === "string" && Array.isArray(c.ideaIds),
-      )
-      .map((c: any) => ({
-        title: c.title,
-        ideaIds: c.ideaIds.filter(Number.isInteger),
-      })),
+      .filter((c: any) => c && typeof c.title === "string" && Array.isArray(c.ideaIds))
+      .map((c: any) => ({ title: c.title, ideaIds: c.ideaIds.filter(Number.isInteger) })),
   };
 }
 
-async function suggestSteps(payload: {
-  markedIdeas: Array<{ n: number; author: string; text: string }>;
-  ownerSummary: string;
-}) {
-  if (!payload.markedIdeas || payload.markedIdeas.length === 0) {
-    return { steps: [] };
-  }
-  const list = payload.markedIdeas
-    .map((i) => `#${i.n} (${i.author}): ${i.text}`)
-    .join("\n");
-  const system =
-    `Ты помогаешь владельцу мастермайнда сформулировать шаги «что беру в работу» из идей, которые его зацепили. Для каждой группы близких идей предложи 1 конкретный шаг: короткий заголовок (5–10 слов), описание (1 предложение), первый микро-шаг на сегодня (5–15 минут работы), и список номеров идей. Не дублируй идеи — синтезируй. Максимум 3 шага. Отвечай JSON: [{"title":"...","detail":"...","firstStep":"...","ideaRefs":[1,2]}]. Без обёртки.`;
-  const user =
-    `Запрос:\n${payload.ownerSummary}\n\nЗацепившие идеи:\n${list}\n\nПредложи шаги.`;
-  const raw = await anthropicCall({ system, user, max_tokens: 1000 });
+async function suggestSteps(p: { markedIdeas: Array<{ n: number; author: string; text: string }>; ownerSummary: string }) {
+  if (!p.markedIdeas || p.markedIdeas.length === 0) return { steps: [] };
+  const list = p.markedIdeas.map((i) => `#${i.n} (${i.author}): ${i.text}`).join("\n");
+  const system = `Помогаешь владельцу мастермайнда сформулировать шаги «беру в работу» из зацепивших идей. Для каждой группы близких идей — 1 конкретный шаг: title (5–10 слов), detail (1 предложение), firstStep (5–15 минут на сегодня), ideaRefs (номера). Не дублируй — синтезируй. Максимум 3 шага. JSON: [{"title":"...","detail":"...","firstStep":"...","ideaRefs":[1,2]}]. Без обёртки.`;
+  const user = `Запрос:\n${p.ownerSummary}\n\nЗацепившие идеи:\n${list}\n\nПредложи шаги.`;
+  const raw = await llmCall({ system, user, max_tokens: 1000 });
   const arr = parseJSON(raw);
   if (!Array.isArray(arr)) return { steps: [] };
   return {
@@ -196,8 +133,6 @@ async function suggestSteps(payload: {
   };
 }
 
-// ───────── маршрутизатор ─────────
-
 const TASKS: Record<string, (p: any) => Promise<any>> = {
   summarizeSlot,
   generateClarifyingQuestions,
@@ -207,20 +142,15 @@ const TASKS: Record<string, (p: any) => Promise<any>> = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const { task, payload } = await req.json();
     const handler = TASKS[task];
     if (!handler) {
-      return new Response(
-        JSON.stringify({ error: `unknown task: ${task}` }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ error: `unknown task: ${task}` }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
     const result = await handler(payload || {});
     return new Response(JSON.stringify(result), {
@@ -228,12 +158,9 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("[llm error]", e);
-    return new Response(
-      JSON.stringify({ error: String((e as Error)?.message || e) }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return new Response(JSON.stringify({ error: String((e as Error)?.message || e) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
