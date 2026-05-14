@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { SessionState } from "@/hooks/useSession";
 import type { StepRow } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ export function FStage5({ state }: { state: SessionState }) {
   const ownerSummary = slots.map((s) => s.summary).filter(Boolean).join(" ");
 
   const [showNew, setShowNew] = useState(false);
+  const [copied, setCopied] = useState<"idle" | "ok" | "err">("idle");
+  const navigate = useNavigate();
   const [suggestions, setSuggestions] = useState<
     { title: string; detail: string; firstStep: string; ideaRefs: number[] }[] | null
   >(null);
@@ -45,6 +48,19 @@ export function FStage5({ state }: { state: SessionState }) {
       due: "",
       ideaRefs: s.ideaRefs ?? [],
     }).catch(console.error);
+  };
+
+  const onCopy = () => {
+    copyProtocol(state, (ok) => {
+      setCopied(ok ? "ok" : "err");
+      setTimeout(() => setCopied("idle"), 2500);
+    });
+  };
+
+  const onFinish = () => {
+    if (confirm("Завершить сессию? Протокол лучше скопировать заранее.")) {
+      navigate("/");
+    }
   };
 
   return (
@@ -90,8 +106,11 @@ export function FStage5({ state }: { state: SessionState }) {
         >
           ИИ предложит шаги
         </Button>
-        <Button variant="ghost" className="ml-auto" onClick={() => copyProtocol(state)}>
-          📋 Копировать протокол
+        <Button variant="ghost" className="ml-auto" onClick={onCopy}>
+          {copied === "ok" ? "✓ Скопировано" : copied === "err" ? "× Не удалось" : "📋 Копировать протокол"}
+        </Button>
+        <Button variant="go" onClick={onFinish}>
+          Завершить сессию
         </Button>
       </div>
 
@@ -137,6 +156,13 @@ export function FStage5({ state }: { state: SessionState }) {
         Если владелец хочет 3-й шаг — спросите:
         <span className="italic opacity-90"> «уверен, что сделаешь все 3? лучше 1–2 честных».</span>
       </Advisory>
+
+      {copied === "ok" && (
+        <Advisory tone="purple" className="mt-3">
+          <AdvisoryLabel>Протокол скопирован</AdvisoryLabel>
+          Вставьте его (Ctrl/Cmd+V) в чат, заметки или письмо участникам.
+        </Advisory>
+      )}
     </>
   );
 }
@@ -263,7 +289,7 @@ function StepCard({ step, state }: { step: StepRow; state: SessionState }) {
   );
 }
 
-function copyProtocol(state: SessionState) {
+function copyProtocol(state: SessionState, onDone?: (ok: boolean) => void) {
   const { session, slots, ideas, steps } = state;
   const lines: string[] = [];
   lines.push(`ПРОТОКОЛ МАСТЕРМАЙНДА · сессия ${session.id}`);
@@ -296,8 +322,16 @@ function copyProtocol(state: SessionState) {
     lines.push(session.notes);
   }
   const text = lines.join("\n");
-  navigator.clipboard?.writeText(text).then(
-    () => alert("Протокол скопирован в буфер"),
-    () => prompt("Скопируйте протокол:", text),
-  );
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => onDone?.(true),
+      () => {
+        prompt("Скопируйте протокол вручную:", text);
+        onDone?.(false);
+      },
+    );
+  } else {
+    prompt("Скопируйте протокол вручную:", text);
+    onDone?.(false);
+  }
 }
